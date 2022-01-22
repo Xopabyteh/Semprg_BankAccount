@@ -1,35 +1,38 @@
-﻿using System.Text;
+﻿using System.Diagnostics;
+using System.Text;
 
 namespace ConsoleApp2;
 
 internal class BankAccount
 {
-    public decimal Balance { get; private set; }
+    public decimal Balance { get; set; }
     public string Owner { get; }
     public int Id { get;  }
-    public List<Transaction> TransactionHistory { get; }
+    protected List<Transaction> TransactionHistory { get; } = new List<Transaction>();
     public BankAccount(decimal balance, string owner, int id)
     {
+
         Balance = balance;
         Owner = owner;
         Id = id;
-        TransactionHistory = new List<Transaction>();
     }
 
-    private void Withdraw(decimal amount, BankAccount to, string name)
+    protected virtual void WithdrawValidity(decimal amount)
     {
-        if (Id != 0)
+        if (Balance < amount)
         {
-            if (Balance < amount)
-            {
-                throw new ArgumentException("Not enough funds");
-            }
-
-            if (amount <= 0)
-            {
-                throw new Exception("Amount must be > 0");
-            }
+            throw new ArgumentException("Not enough funds");
         }
+    }
+    protected virtual void Withdraw(decimal amount, BankAccount to, string name)
+    {
+        WithdrawValidity(amount);
+
+        if (amount <= 0)
+        {
+            throw new Exception("Amount must be > 0");
+        }
+        
         Transaction t = new Transaction(DateTime.Now, name, Transaction.TypeEnum.Withdraw, amount,to);
         TransactionHistory.Add(t);
 
@@ -37,12 +40,20 @@ internal class BankAccount
         to.Balance += amount;
     }
     
-    public void Deposit(decimal amount, BankAccount from,string name)
+    public virtual void Deposit(decimal amount, BankAccount from,string name)
     {
-        Transaction t = new Transaction(DateTime.Now, name, Transaction.TypeEnum.Deposit, amount,from);
-        TransactionHistory.Add(t);
 
-        from.Withdraw(amount, this, name); //Withdraw from the other and put cash into this
+        try
+        { // amount > 0 && amount > balance
+            from.Withdraw(amount, this, name); //Withdraw from the other and put cash into this
+        }
+        catch
+        {
+            return;
+        }
+        //Don't make a transaction if the withdraw didn't work
+        Transaction t = new Transaction(DateTime.Now, name, Transaction.TypeEnum.Deposit, amount, from);
+        TransactionHistory.Add(t);
     }
 
     public override string ToString()
@@ -53,6 +64,8 @@ internal class BankAccount
     public void WriteTransactionHistory()
     {
         StringBuilder builder = new StringBuilder();
+        builder.Append(Id).AppendLine(":");
+
         foreach (var transaction in TransactionHistory)
         {
             builder.AppendLine(transaction.ToString());
@@ -69,18 +82,5 @@ internal class BankAccount
         }
 
         Console.WriteLine(builder.ToString());
-    }
-    
-    private const decimal InterestRate = 0.02m;
-    public static void GiveInterests(List<BankAccount> accounts)
-    {
-        //acc[0] is central bank
-        BankAccount centralBank = accounts[0];
-        for (int i = 1; i < accounts.Count; i++)
-        {
-            BankAccount acc = accounts[i];
-            decimal interest = acc.Balance * InterestRate;
-            acc.Deposit(interest,centralBank,"Interest");
-        }
     }
 }
